@@ -8,10 +8,20 @@ from datetime import UTC, date, datetime
 
 from sqlmodel import Session, col, func, select
 
-from figus2026.models import Collector, Country, OwnedSticker, PackOpening, PackSticker, Player
+from figus2026.models import (
+    Collector,
+    Country,
+    OwnedSticker,
+    PackOpening,
+    PackSticker,
+    Player,
+    Question,
+    TriviaAttempt,
+)
 
 DAILY_PACK_LIMIT = 2
 STICKERS_PER_PACK = 5
+TRIVIA_MAX_BONUS = 3  # max extra packs per day from trivia
 
 
 @dataclass(frozen=True)
@@ -45,12 +55,14 @@ def get_or_create_collector(session: Session, slug: str) -> Collector:
 
 
 def country_summaries(session: Session, collector_slug: str) -> list[dict[str, int | str | list[str]]]:
-    """Return country progress for a collector."""
+    """Return country progress for a collector, skipping countries with no players."""
     collector = get_or_create_collector(session, collector_slug)
     countries = session.exec(select(Country).order_by(Country.name)).all()
     summaries: list[dict[str, int | str | list[str]]] = []
     for country in countries:
         total = session.exec(select(func.count()).select_from(Player).where(Player.country_id == country.id)).one()
+        if total == 0:
+            continue
         owned = session.exec(
             select(func.count())
             .select_from(OwnedSticker)
@@ -62,6 +74,9 @@ def country_summaries(session: Session, collector_slug: str) -> list[dict[str, i
                 "code": country.code,
                 "name": country.name,
                 "stripe_colors": stripe_colors(country),
+                "coach": country.coach or "",
+                "federation_name": country.federation_name or "",
+                "federation_logo_url": country.federation_logo_url or "",
                 "total_stickers": total,
                 "owned_stickers": owned,
                 "missing_stickers": total - owned,
@@ -92,11 +107,22 @@ def country_stickers(session: Session, country_code: str, collector_slug: str) -
         }
         for player in players
     ]
-    return {"code": country.code, "name": country.name, "stripe_colors": stripe_colors(country), "stickers": stickers}
+    return {
+        "code": country.code,
+        "name": country.name,
+        "stripe_colors": stripe_colors(country),
+        "coach": country.coach,
+        "federation_name": country.federation_name,
+        "federation_logo_url": country.federation_logo_url,
+        "stickers": stickers,
+    }
 
 
 def open_daily_pack(session: Session, collector_slug: str, current_date: date | None = None) -> dict[str, object]:
-    """Open one pack if the collector still has a daily allowance."""
+    """Open one pack if the collector still has a daily allowance.
+
+    Each correct trivia answer grants one extra pack, up to {TRIVIA_MAX_BONUS} per day.
+    """
     opened_on = current_date or today()
     collector = get_or_create_collector(session, collector_slug)
     opened_count = session.exec(
@@ -104,7 +130,19 @@ def open_daily_pack(session: Session, collector_slug: str, current_date: date | 
         .select_from(PackOpening)
         .where(PackOpening.collector_id == collector.id, PackOpening.opened_on == opened_on)
     ).one()
-    if opened_count >= DAILY_PACK_LIMIT:
+
+    correct_today = session.exec(
+        select(func.count())
+        .select_from(TriviaAttempt)
+        .where(
+            TriviaAttempt.collector_id == collector.id,
+            TriviaAttempt.answered_correctly == True,  # noqa: E712
+            func.date(TriviaAttempt.attempted_at) == str(opened_on),
+        )
+    ).one()
+    effective_limit = DAILY_PACK_LIMIT + min(correct_today, TRIVIA_MAX_BONUS)
+
+    if opened_count >= effective_limit:
         return {
             "opened": False,
             "reason": "daily_limit_reached",
@@ -137,7 +175,7 @@ def open_daily_pack(session: Session, collector_slug: str, current_date: date | 
     session.commit()
     return {
         "opened": True,
-        "remaining_today": DAILY_PACK_LIMIT - opened_count - 1,
+        "remaining_today": effective_limit - opened_count - 1,
         "stickers": [
             {
                 "id": sticker.player.id,
@@ -150,4 +188,81 @@ def open_daily_pack(session: Session, collector_slug: str, current_date: date | 
             }
             for sticker in pulled
         ],
+    }
+
+
+def get_trivia_question(session: Session, collector_slug: str) -> dict[str, object] | None:
+    """Return a random question the collector has not yet answered today.
+
+    Options are shuffled so the correct answer position is unpredictable.
+    Returns None when all questions have been answered today.
+    """
+    collector = get_or_create_collector(session, collector_slug)
+    answered_today = set(
+        session.exec(
+            select(TriviaAttempt.question_id).where(
+                TriviaAttempt.collector_id == collector.id,
+                func.date(TriviaAttempt.attempted_at) == str(today()),
+            )
+        ).all()
+    )
+    all_questions = session.exec(select(Question)).all()
+    unanswered = [q for q in all_questions if q.id not in answered_today]
+    if not unanswered:
+        return None
+
+    question = random.choice(unanswered)
+    wrong = question.wrong_answers.split("|")
+    options = [question.correct_answer, *wrong]
+    random.shuffle(options)
+    return {
+        "id": question.id,
+        "text": question.text,
+        "options": options,
+        "category": question.category,
+    }
+
+
+def submit_trivia_answer(
+    session: Session,
+    question_id: int,
+    answer: str,
+    collector_slug: str,
+) -> dict[str, object]:
+    """Record the collector's answer and award an extra pack slot if correct.
+
+    Returns whether the answer was correct and how many bonus packs remain today.
+    """
+    question = session.exec(select(Question).where(Question.id == question_id)).one_or_none()
+    if question is None:
+        return {"error": "question_not_found"}
+
+    collector = get_or_create_collector(session, collector_slug)
+    is_correct = answer.strip() == question.correct_answer
+
+    session.add(
+        TriviaAttempt(
+            collector_id=collector.id or 0,
+            question_id=question_id,
+            answered_correctly=is_correct,
+        )
+    )
+    session.commit()
+
+    correct_today = session.exec(
+        select(func.count())
+        .select_from(TriviaAttempt)
+        .where(
+            TriviaAttempt.collector_id == collector.id,
+            TriviaAttempt.answered_correctly == True,  # noqa: E712
+            func.date(TriviaAttempt.attempted_at) == str(today()),
+        )
+    ).one()
+    bonus_remaining = max(0, min(correct_today, TRIVIA_MAX_BONUS))
+
+    return {
+        "correct": is_correct,
+        "correct_answer": question.correct_answer,
+        "extra_pack_awarded": is_correct and correct_today <= TRIVIA_MAX_BONUS,
+        "bonus_packs_today": bonus_remaining,
     }

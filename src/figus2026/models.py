@@ -21,6 +21,9 @@ class Country(SQLModel, table=True):
     name: str
     wikipedia_url: str
     stripe_colors: str = Field(default="#75aadb|#ffffff|#75aadb")
+    coach: str | None = None
+    federation_name: str | None = None
+    federation_logo_url: str | None = None
 
 
 class Player(SQLModel, table=True):
@@ -72,3 +75,23 @@ class PackSticker(SQLModel, table=True):
     pack_opening_id: int = Field(foreign_key="packopening.id", index=True)
     player_id: int = Field(foreign_key="player.id", index=True)
     is_new: bool
+
+
+class Question(SQLModel, table=True):
+    """A multiple-choice trivia question that can unlock an extra pack."""
+
+    id: int | None = Field(default=None, primary_key=True)
+    text: str
+    correct_answer: str
+    wrong_answers: str  # pipe-separated, exactly 3 options
+    category: str | None = None
+
+
+class TriviaAttempt(SQLModel, table=True):
+    """A collector's answer to a trivia question."""
+
+    id: int | None = Field(default=None, primary_key=True)
+    collector_id: int = Field(foreign_key="collector.id", index=True)
+    question_id: int = Field(foreign_key="question.id", index=True)
+    answered_correctly: bool
+    attempted_at: datetime = Field(default_factory=utc_now)

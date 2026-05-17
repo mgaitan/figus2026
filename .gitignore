@@ -27,3 +27,8 @@ __pycache__/
 # local worktrees
 .worktrees/
 .external-worktrees/
+
+# environment
+.env
+.env.*
+!.env.example
