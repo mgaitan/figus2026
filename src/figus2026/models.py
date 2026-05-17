@@ -20,6 +20,7 @@ class Country(SQLModel, table=True):
     code: str = Field(index=True, unique=True, min_length=2, max_length=3)
     name: str
     wikipedia_url: str
+    stripe_colors: str = Field(default="#75aadb|#ffffff|#75aadb")
 
 
 class Player(SQLModel, table=True):

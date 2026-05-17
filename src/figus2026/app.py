@@ -4,9 +4,12 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator, Generator
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from sqlmodel import Session
 
 from figus2026.database import (
@@ -19,7 +22,28 @@ from figus2026.database import (
 from figus2026.services import country_stickers, country_summaries, open_daily_pack
 
 
-def create_app(database_url: str = DEFAULT_DATABASE_URL, seed: bool = True) -> FastAPI:
+def mount_frontend(app: FastAPI, frontend_dist: Path | None = None) -> None:
+    """Serve the built Vite album when `frontend/dist` is available."""
+    dist_path = frontend_dist or Path("frontend/dist")
+    if not dist_path.exists():
+        return
+
+    app.mount("/assets", StaticFiles(directory=dist_path / "assets"), name="frontend-assets")
+
+    @app.get("/")
+    def frontend_index() -> FileResponse:
+        return FileResponse(dist_path / "index.html")
+
+    @app.get("/favicon.svg")
+    def frontend_favicon() -> FileResponse:
+        return FileResponse(dist_path / "favicon.svg")
+
+
+def create_app(
+    database_url: str = DEFAULT_DATABASE_URL,
+    seed: bool = True,
+    frontend_dist: Path | None = None,
+) -> FastAPI:
     """Create the FastAPI app and initialize the local database."""
     engine = build_engine(database_url)
     create_db_and_tables(engine)
@@ -45,6 +69,7 @@ def create_app(database_url: str = DEFAULT_DATABASE_URL, seed: bool = True) -> F
         allow_headers=["*"],
     )
     app.state.engine = engine
+    mount_frontend(app, frontend_dist)
 
     def session_dependency() -> Generator[Session]:
         with Session(engine) as session:
@@ -58,7 +83,7 @@ def create_app(database_url: str = DEFAULT_DATABASE_URL, seed: bool = True) -> F
     def list_countries(
         collector_slug: str = DEMO_COLLECTOR_SLUG,
         session: Session = Depends(session_dependency),  # noqa: B008
-    ) -> list[dict[str, int | str]]:
+    ) -> list[dict[str, int | str | list[str]]]:
         return country_summaries(session, collector_slug)
 
     @app.get("/api/countries/{country_code}/stickers")

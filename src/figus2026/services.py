@@ -21,6 +21,11 @@ class PulledSticker:
     is_new: bool
 
 
+def stripe_colors(country: Country) -> list[str]:
+    """Return editable country stripe colors for the album guard."""
+    return [color for color in country.stripe_colors.split("|") if color]
+
+
 def today() -> date:
     """Return the date used to enforce daily pack limits."""
     return datetime.now(UTC).date()
@@ -39,11 +44,11 @@ def get_or_create_collector(session: Session, slug: str) -> Collector:
     return collector
 
 
-def country_summaries(session: Session, collector_slug: str) -> list[dict[str, int | str]]:
+def country_summaries(session: Session, collector_slug: str) -> list[dict[str, int | str | list[str]]]:
     """Return country progress for a collector."""
     collector = get_or_create_collector(session, collector_slug)
     countries = session.exec(select(Country).order_by(Country.name)).all()
-    summaries: list[dict[str, int | str]] = []
+    summaries: list[dict[str, int | str | list[str]]] = []
     for country in countries:
         total = session.exec(select(func.count()).select_from(Player).where(Player.country_id == country.id)).one()
         owned = session.exec(
@@ -56,6 +61,7 @@ def country_summaries(session: Session, collector_slug: str) -> list[dict[str, i
             {
                 "code": country.code,
                 "name": country.name,
+                "stripe_colors": stripe_colors(country),
                 "total_stickers": total,
                 "owned_stickers": owned,
                 "missing_stickers": total - owned,
@@ -86,7 +92,7 @@ def country_stickers(session: Session, country_code: str, collector_slug: str) -
         }
         for player in players
     ]
-    return {"code": country.code, "name": country.name, "stickers": stickers}
+    return {"code": country.code, "name": country.name, "stripe_colors": stripe_colors(country), "stickers": stickers}
 
 
 def open_daily_pack(session: Session, collector_slug: str, current_date: date | None = None) -> dict[str, object]:

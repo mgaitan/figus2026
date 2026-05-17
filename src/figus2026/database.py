@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from sqlalchemy import inspect
 from sqlalchemy.engine import Engine
 from sqlmodel import Session, SQLModel, create_engine, select
 
@@ -21,6 +22,20 @@ def build_engine(database_url: str = DEFAULT_DATABASE_URL) -> Engine:
 def create_db_and_tables(engine: Engine) -> None:
     """Create all tables for the album."""
     SQLModel.metadata.create_all(engine)
+    ensure_country_columns(engine)
+
+
+def ensure_country_columns(engine: Engine) -> None:
+    """Add lightweight SQLite MVP columns that may be missing locally."""
+    if not inspect(engine).has_table("country"):
+        return
+    column_names = {column["name"] for column in inspect(engine).get_columns("country")}
+    if "stripe_colors" in column_names:
+        return
+    with engine.begin() as connection:
+        connection.exec_driver_sql(
+            "ALTER TABLE country ADD COLUMN stripe_colors VARCHAR DEFAULT '#75aadb|#ffffff|#75aadb'"
+        )
 
 
 def seed_database(session: Session) -> None:
@@ -32,9 +47,15 @@ def seed_database(session: Session) -> None:
                 code=seed_country.code,
                 name=seed_country.name,
                 wikipedia_url=seed_country.wikipedia_url,
+                stripe_colors="|".join(seed_country.stripe_colors),
             )
             session.add(country)
             session.flush()
+        else:
+            country.name = seed_country.name
+            country.wikipedia_url = seed_country.wikipedia_url
+            country.stripe_colors = "|".join(seed_country.stripe_colors)
+            session.add(country)
 
         for seed_player in seed_country.players:
             player = session.exec(

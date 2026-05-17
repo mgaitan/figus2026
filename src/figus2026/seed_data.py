@@ -18,6 +18,7 @@ class SeedCountry:
     code: str
     name: str
     wikipedia_url: str
+    stripe_colors: tuple[str, ...]
     players: tuple[SeedPlayer, ...]
 
 
@@ -26,6 +27,7 @@ WIKIPEDIA_TEAMS: tuple[SeedCountry, ...] = (
         code="ARG",
         name="Argentina",
         wikipedia_url="https://en.wikipedia.org/wiki/Argentina_national_football_team#Current_squad",
+        stripe_colors=("#75aadb", "#ffffff", "#75aadb"),
         players=(
             SeedPlayer(
                 "Emiliano Martinez",
@@ -69,6 +71,7 @@ WIKIPEDIA_TEAMS: tuple[SeedCountry, ...] = (
         code="BRA",
         name="Brazil",
         wikipedia_url="https://en.wikipedia.org/wiki/Brazil_national_football_team#Current_squad",
+        stripe_colors=("#009739", "#ffdf00", "#002776"),
         players=(
             SeedPlayer(
                 "Alisson",
@@ -112,6 +115,7 @@ WIKIPEDIA_TEAMS: tuple[SeedCountry, ...] = (
         code="FRA",
         name="France",
         wikipedia_url="https://en.wikipedia.org/wiki/France_national_football_team#Current_squad",
+        stripe_colors=("#0055a4", "#ffffff", "#ef4135"),
         players=(
             SeedPlayer(
                 "Mike Maignan",

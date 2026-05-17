@@ -3,6 +3,7 @@ import './style.css'
 type Country = {
   code: string
   name: string
+  stripe_colors: string[]
   total_stickers: number
   owned_stickers: number
   missing_stickers: number
@@ -20,6 +21,7 @@ type Sticker = {
 type CountryPage = {
   code: string
   name: string
+  stripe_colors: string[]
   stickers: Sticker[]
 }
 
@@ -56,6 +58,7 @@ let lastPack: PackResult | null = null
 let loading = true
 let notice = ''
 let pageTurning = false
+let sidebarOpen = true
 
 async function apiGet<T>(path: string): Promise<T> {
   const response = await fetch(`${apiBaseUrl}${path}`)
@@ -116,6 +119,23 @@ function initials(name: string): string {
     .toUpperCase()
 }
 
+function countryIndex(): number {
+  return countries.findIndex((country) => country.code === selectedCountryCode)
+}
+
+function countryByOffset(offset: number): Country | null {
+  if (countries.length === 0) {
+    return null
+  }
+  const nextIndex = (countryIndex() + offset + countries.length) % countries.length
+  return countries[nextIndex] ?? null
+}
+
+function stripeStyle(colors: string[]): string {
+  const usableColors = colors.length > 0 ? colors : ['#75aadb', '#ffffff', '#75aadb']
+  return `style="--stripe-colors: ${usableColors.join(', ')};"`
+}
+
 async function loadCountries(): Promise<void> {
   countries = await apiGet<Country[]>(`/api/countries?collector_slug=${collectorSlug}`)
 }
@@ -154,6 +174,11 @@ function countryButtons(): string {
 
 function stickerCard(sticker: Sticker): string {
   const rarity = rarityLabel(sticker.scarcity)
+  const slot = selectedPage ? selectedPage.stickers.findIndex((item) => item.id === sticker.id) + 1 : 0
+  const revealedPhoto =
+    sticker.owned && sticker.image_url
+      ? `<img src="${sticker.image_url}" alt="${sticker.name}" loading="lazy" />`
+      : `<span>${sticker.owned ? initials(sticker.name) : '?'}</span>`
   return `
     <article class="sticker ${sticker.owned ? 'is-owned' : 'is-missing'}">
       <div class="sticker-shine"></div>
@@ -162,15 +187,11 @@ function stickerCard(sticker: Sticker): string {
         <b>${rarity}</b>
       </div>
       <div class="sticker-photo ${rarity}">
-        ${
-          sticker.image_url
-            ? `<img src="${sticker.image_url}" alt="${sticker.name}" loading="lazy" />`
-            : `<span>${initials(sticker.name)}</span>`
-        }
+        ${revealedPhoto}
       </div>
       <div class="sticker-meta">
-        <strong>${sticker.name}</strong>
-        <span>${positionName(sticker.position)}</span>
+        <strong>${sticker.owned ? sticker.name : `Figu ${slot.toString().padStart(2, '0')}`}</strong>
+        <span>${sticker.owned ? positionName(sticker.position) : 'Sin pegar'}</span>
       </div>
       <div class="sticker-status">${sticker.owned ? 'pegada' : 'falta'}</div>
     </article>
@@ -205,8 +226,10 @@ function albumPage(): string {
     return '<section class="album-spread"></section>'
   }
   const country = countries.find((item) => item.code === selectedPage?.code)
+  const previousCountry = countryByOffset(-1)
+  const nextCountry = countryByOffset(1)
   return `
-    <section class="album-spread ${pageTurning ? 'is-turning' : ''}">
+    <section class="album-spread ${pageTurning ? 'is-turning' : ''}" ${stripeStyle(selectedPage.stripe_colors)}>
       <div class="album-cover-strip">
         <span>Copa Mundial 2026</span>
         <strong>Álbum de figus</strong>
@@ -226,6 +249,16 @@ function albumPage(): string {
         <div class="sticker-grid">
           ${selectedPage.stickers.map(stickerCard).join('')}
         </div>
+        <div class="page-nav">
+          <button class="page-button" type="button" data-country="${previousCountry?.code ?? selectedCountryCode}">
+            <span>Anterior</span>
+            <strong>${previousCountry ? countryName(previousCountry.name) : ''}</strong>
+          </button>
+          <button class="page-button" type="button" data-country="${nextCountry?.code ?? selectedCountryCode}">
+            <span>Siguiente</span>
+            <strong>${nextCountry ? countryName(nextCountry.name) : ''}</strong>
+          </button>
+        </div>
       </div>
     </section>
   `
@@ -238,7 +271,7 @@ function render(): void {
   }
 
   app.innerHTML = `
-    <main class="shell">
+    <main class="shell ${sidebarOpen ? '' : 'is-sidebar-collapsed'}">
       <aside class="sidebar">
         <div class="brand">
           <span>Figus</span>
@@ -256,6 +289,9 @@ function render(): void {
           <strong>5</strong>
         </button>
       </aside>
+      <button class="sidebar-toggle" id="sidebar-toggle" type="button">
+        ${sidebarOpen ? 'Ocultar selecciones' : 'Ver selecciones'}
+      </button>
       <div class="album">
         ${albumPage()}
         ${packStrip()}
@@ -273,6 +309,10 @@ function render(): void {
   })
   document.querySelector<HTMLButtonElement>('#open-pack')?.addEventListener('click', () => {
     void openPack()
+  })
+  document.querySelector<HTMLButtonElement>('#sidebar-toggle')?.addEventListener('click', () => {
+    sidebarOpen = !sidebarOpen
+    render()
   })
 }
 
