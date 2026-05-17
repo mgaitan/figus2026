@@ -23,7 +23,7 @@ classifiers = [
     "Typing :: Typed",
 ]
 dependencies = [
-    "fastapi>=0.136.1",
+    "fastapi[standard]>=0.136.1",
     "rich",
     "sqlmodel>=0.0.38",
     "uvicorn>=0.46.0",

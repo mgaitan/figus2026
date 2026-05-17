@@ -18,6 +18,14 @@ Run the API locally:
 uv run uvicorn figus2026.app:app --reload
 ```
 
+Run the frontend in another terminal:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
 Seed data is created automatically in `figus2026.db` for the prototype. The first MVP endpoints are:
 
 - `GET /health`
