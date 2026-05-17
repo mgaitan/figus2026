@@ -84,6 +84,8 @@ Description: Cloud sticker album for the 2026 World Cup.
 
 ## Language preferences
 
-- The public language is English: all committable text and Github interactions must be in simple English (including documentation, comments, docstrings, commit messages, PR descriptions, etc.).
+- For the time being The public language is Spanish (español rioplantese)
+
+-  all committable text and Github interactions must be in simple English (including documentation, comments, docstrings, commit messages, PR descriptions, etc.).
 - However, when interacting with the developer in chat, respond in the language they use.
 - Avoid sexist or exclusionary language. Always prefer gender-neutral phrasing.

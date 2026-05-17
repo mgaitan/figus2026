@@ -576,6 +576,127 @@ h1 {
   background: #087c63;
 }
 
+/* Federation header */
+.page-header-text {
+  display: grid;
+  gap: 4px;
+}
+
+.page-header-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.federation-logo {
+  max-width: 72px;
+  max-height: 72px;
+  object-fit: contain;
+  filter: drop-shadow(2px 2px 0 rgba(0, 0, 0, 0.18));
+}
+
+.federation-logo-mini {
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+}
+
+.coach-name {
+  color: #374139;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.federation-name {
+  color: #596259;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* Trivia panel */
+.trivia-panel {
+  display: grid;
+  gap: 10px;
+  border: 2px solid #151817;
+  border-radius: 7px;
+  padding: 12px;
+  background: #fff8df;
+  font-size: 14px;
+}
+
+.trivia-intro {
+  margin: 0;
+  color: #596259;
+}
+
+.trivia-start-btn,
+.trivia-next-btn {
+  display: block;
+  width: 100%;
+  border: 2px solid #151817;
+  border-radius: 6px;
+  padding: 9px 12px;
+  color: #fff8df;
+  background: #245ea8;
+  font-weight: 900;
+  cursor: pointer;
+  box-shadow: 2px 2px 0 #151817;
+  text-align: center;
+}
+
+.trivia-question {
+  margin: 0;
+  color: #141817;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.trivia-options {
+  display: grid;
+  gap: 6px;
+}
+
+.trivia-option {
+  width: 100%;
+  border: 2px solid #151817;
+  border-radius: 6px;
+  padding: 7px 10px;
+  color: #141817;
+  background: #f6edd2;
+  font-size: 13px;
+  cursor: pointer;
+  text-align: left;
+  transition: background 120ms;
+}
+
+.trivia-option:hover {
+  background: #f4cb45;
+}
+
+.trivia-result {
+  border-width: 3px;
+}
+
+.trivia-result.is-correct {
+  border-color: #087c63;
+  background: #e8f6f0;
+}
+
+.trivia-result.is-wrong {
+  border-color: #d02831;
+  background: #fdeaea;
+}
+
+.trivia-result strong {
+  font-size: 16px;
+}
+
+.trivia-bonus {
+  font-weight: 700;
+  color: #087c63;
+}
+
 @keyframes turn-page {
   0% {
     transform: perspective(1400px) rotateY(-7deg) translateX(-4px);

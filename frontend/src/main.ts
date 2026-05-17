@@ -4,6 +4,9 @@ type Country = {
   code: string
   name: string
   stripe_colors: string[]
+  coach: string
+  federation_name: string
+  federation_logo_url: string
   total_stickers: number
   owned_stickers: number
   missing_stickers: number
@@ -22,6 +25,9 @@ type CountryPage = {
   code: string
   name: string
   stripe_colors: string[]
+  coach: string | null
+  federation_name: string | null
+  federation_logo_url: string | null
   stickers: Sticker[]
 }
 
@@ -39,6 +45,20 @@ type PackResult = {
   opened: boolean
   remaining_today: number
   stickers: PackSticker[]
+}
+
+type TriviaQuestion = {
+  id: number
+  text: string
+  options: string[]
+  category: string | null
+}
+
+type TriviaResult = {
+  correct: boolean
+  correct_answer: string
+  extra_pack_awarded: boolean
+  bonus_packs_today: number
 }
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:8000'
@@ -59,6 +79,9 @@ let loading = true
 let notice = ''
 let pageTurning = false
 let sidebarOpen = true
+let triviaQuestion: TriviaQuestion | null = null
+let triviaResult: TriviaResult | null = null
+let triviaLoading = false
 
 async function apiGet<T>(path: string): Promise<T> {
   const response = await fetch(`${apiBaseUrl}${path}`)
@@ -68,8 +91,12 @@ async function apiGet<T>(path: string): Promise<T> {
   return response.json() as Promise<T>
 }
 
-async function apiPost<T>(path: string): Promise<T> {
-  const response = await fetch(`${apiBaseUrl}${path}`, { method: 'POST' })
+async function apiPost<T>(path: string, body?: unknown): Promise<T> {
+  const response = await fetch(`${apiBaseUrl}${path}`, {
+    method: 'POST',
+    headers: body ? { 'Content-Type': 'application/json' } : undefined,
+    body: body ? JSON.stringify(body) : undefined,
+  })
   if (response.status === 429) {
     const limit = (await response.json()) as { detail: PackResult & { reason: string } }
     notice = limit.detail.reason === 'daily_limit_reached' ? 'Ya abriste los sobres de hoy' : 'Sobre no disponible'
@@ -86,6 +113,15 @@ function countryName(name: string): string {
     {
       Brazil: 'Brasil',
       France: 'Francia',
+      'United States': 'Estados Unidos',
+      Mexico: 'México',
+      Canada: 'Canadá',
+      Spain: 'España',
+      England: 'Inglaterra',
+      Germany: 'Alemania',
+      Portugal: 'Portugal',
+      Uruguay: 'Uruguay',
+      Colombia: 'Colombia',
     }[name] ?? name
   )
 }
@@ -158,13 +194,39 @@ async function openPack(): Promise<void> {
   await loadCountry(selectedCountryCode)
 }
 
+async function loadTriviaQuestion(): Promise<void> {
+  triviaLoading = true
+  triviaResult = null
+  render()
+  try {
+    triviaQuestion = await apiGet<TriviaQuestion>(`/api/trivia/question?collector_slug=${collectorSlug}`)
+  } catch {
+    triviaQuestion = null
+    notice = 'No hay más preguntas disponibles hoy'
+  }
+  triviaLoading = false
+  render()
+}
+
+async function submitTriviaAnswer(answer: string): Promise<void> {
+  if (!triviaQuestion) return
+  triviaResult = await apiPost<TriviaResult>(`/api/trivia/question/${triviaQuestion.id}/answer`, {
+    answer,
+    collector_slug: collectorSlug,
+  })
+  if (triviaResult.extra_pack_awarded) {
+    await loadCountries()
+  }
+  render()
+}
+
 function countryButtons(): string {
   return countries
     .map(
       (country) => `
         <button class="country-tab ${country.code === selectedCountryCode ? 'is-active' : ''}" data-country="${country.code}">
+          ${country.federation_logo_url ? `<img class="federation-logo-mini" src="${country.federation_logo_url}" alt="" aria-hidden="true" loading="lazy" />` : ''}
           <span>${countryName(country.name)}</span>
-          <small>${country.code}</small>
           <strong>${country.owned_stickers}/${country.total_stickers}</strong>
         </button>
       `,
@@ -221,11 +283,81 @@ function packStrip(): string {
   `
 }
 
+function triviaPanel(): string {
+  if (triviaLoading) {
+    return '<div class="trivia-panel"><span>Cargando pregunta…</span></div>'
+  }
+
+  if (triviaResult) {
+    const correct = triviaResult.correct
+    return `
+      <div class="trivia-panel trivia-result ${correct ? 'is-correct' : 'is-wrong'}">
+        <strong>${correct ? '¡Correcto!' : 'Incorrecto'}</strong>
+        <span>Respuesta: <em>${triviaResult.correct_answer}</em></span>
+        ${triviaResult.extra_pack_awarded ? '<span class="trivia-bonus">+1 sobre desbloqueado 🎁</span>' : ''}
+        <button class="trivia-next-btn" id="trivia-next">Otra pregunta</button>
+      </div>
+    `
+  }
+
+  if (!triviaQuestion) {
+    return `
+      <div class="trivia-panel">
+        <p class="trivia-intro">Respondé preguntas para ganar sobres extra.</p>
+        <button class="trivia-start-btn" id="trivia-start">Responder trivia</button>
+      </div>
+    `
+  }
+
+  const optionButtons = triviaQuestion.options
+    .map(
+      (opt) => `
+        <button class="trivia-option" data-answer="${opt}">${opt}</button>
+      `,
+    )
+    .join('')
+
+  return `
+    <div class="trivia-panel">
+      <p class="trivia-question">${triviaQuestion.text}</p>
+      <div class="trivia-options">${optionButtons}</div>
+    </div>
+  `
+}
+
+function federationHeader(): string {
+  if (!selectedPage) return ''
+  const country = countries.find((item) => item.code === selectedPage?.code)
+  const logo = selectedPage.federation_logo_url
+    ? `<img class="federation-logo" src="${selectedPage.federation_logo_url}" alt="${selectedPage.federation_name ?? ''}" loading="lazy" />`
+    : ''
+  const coachLine = selectedPage.coach ? `<span class="coach-name">DT: ${selectedPage.coach}</span>` : ''
+  const fedName = selectedPage.federation_name
+    ? `<span class="federation-name">${selectedPage.federation_name}</span>`
+    : ''
+  return `
+    <div class="page-header">
+      <div class="page-header-text">
+        <span class="eyebrow">Selección ${selectedPage.code}</span>
+        <h1>${countryName(selectedPage.name)}</h1>
+        ${coachLine}
+        ${fedName}
+      </div>
+      <div class="page-header-right">
+        ${logo}
+        <div class="progress-stamp">
+          <strong>${country?.owned_stickers ?? 0}</strong>
+          <span>de ${country?.total_stickers ?? selectedPage.stickers.length}</span>
+        </div>
+      </div>
+    </div>
+  `
+}
+
 function albumPage(): string {
   if (!selectedPage) {
     return '<section class="album-spread"></section>'
   }
-  const country = countries.find((item) => item.code === selectedPage?.code)
   const previousCountry = countryByOffset(-1)
   const nextCountry = countryByOffset(1)
   return `
@@ -235,17 +367,7 @@ function albumPage(): string {
         <strong>Álbum de figus</strong>
       </div>
       <div class="album-page">
-        <div class="page-header">
-          <div>
-            <span class="eyebrow">Selección ${selectedPage.code}</span>
-            <h1>${countryName(selectedPage.name)}</h1>
-            <p>Plantel actual para completar, pegar y sufrir con dignidad.</p>
-          </div>
-          <div class="progress-stamp">
-            <strong>${country?.owned_stickers ?? 0}</strong>
-            <span>de ${country?.total_stickers ?? selectedPage.stickers.length}</span>
-          </div>
-        </div>
+        ${federationHeader()}
         <div class="sticker-grid">
           ${selectedPage.stickers.map(stickerCard).join('')}
         </div>
@@ -288,6 +410,7 @@ function render(): void {
           <span>Abrir sobre</span>
           <strong>5</strong>
         </button>
+        ${triviaPanel()}
       </aside>
       <button class="sidebar-toggle" id="sidebar-toggle" type="button">
         ${sidebarOpen ? 'Ocultar selecciones' : 'Ver selecciones'}
@@ -314,11 +437,30 @@ function render(): void {
     sidebarOpen = !sidebarOpen
     render()
   })
+  document.querySelector<HTMLButtonElement>('#trivia-start')?.addEventListener('click', () => {
+    void loadTriviaQuestion()
+  })
+  document.querySelector<HTMLButtonElement>('#trivia-next')?.addEventListener('click', () => {
+    triviaQuestion = null
+    triviaResult = null
+    void loadTriviaQuestion()
+  })
+  document.querySelectorAll<HTMLButtonElement>('.trivia-option').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const answer = btn.dataset.answer
+      if (answer) {
+        void submitTriviaAnswer(answer)
+      }
+    })
+  })
 }
 
 async function boot(): Promise<void> {
   try {
     await loadCountries()
+    if (countries.length > 0) {
+      selectedCountryCode = countries[0]?.code ?? 'ARG'
+    }
     await loadCountry(selectedCountryCode)
   } catch {
     notice = 'API no disponible'

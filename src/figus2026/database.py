@@ -6,8 +6,9 @@ from sqlalchemy import inspect
 from sqlalchemy.engine import Engine
 from sqlmodel import Session, SQLModel, create_engine, select
 
-from figus2026.models import Collector, Country, Player
+from figus2026.models import Collector, Country, Player, Question
 from figus2026.seed_data import WIKIPEDIA_TEAMS
+from figus2026.trivia_data import TRIVIA_QUESTIONS
 
 DEFAULT_DATABASE_URL = "sqlite:///figus2026.db"
 DEMO_COLLECTOR_SLUG = "demo"
@@ -30,12 +31,16 @@ def ensure_country_columns(engine: Engine) -> None:
     if not inspect(engine).has_table("country"):
         return
     column_names = {column["name"] for column in inspect(engine).get_columns("country")}
-    if "stripe_colors" in column_names:
-        return
+    new_columns = {
+        "stripe_colors": "VARCHAR DEFAULT '#75aadb|#ffffff|#75aadb'",
+        "coach": "VARCHAR",
+        "federation_name": "VARCHAR",
+        "federation_logo_url": "VARCHAR",
+    }
     with engine.begin() as connection:
-        connection.exec_driver_sql(
-            "ALTER TABLE country ADD COLUMN stripe_colors VARCHAR DEFAULT '#75aadb|#ffffff|#75aadb'"
-        )
+        for col_name, col_def in new_columns.items():
+            if col_name not in column_names:
+                connection.exec_driver_sql(f"ALTER TABLE country ADD COLUMN {col_name} {col_def}")
 
 
 def seed_database(session: Session) -> None:
@@ -48,6 +53,9 @@ def seed_database(session: Session) -> None:
                 name=seed_country.name,
                 wikipedia_url=seed_country.wikipedia_url,
                 stripe_colors="|".join(seed_country.stripe_colors),
+                coach=seed_country.coach,
+                federation_name=seed_country.federation_name,
+                federation_logo_url=seed_country.federation_logo_url,
             )
             session.add(country)
             session.flush()
@@ -55,6 +63,9 @@ def seed_database(session: Session) -> None:
             country.name = seed_country.name
             country.wikipedia_url = seed_country.wikipedia_url
             country.stripe_colors = "|".join(seed_country.stripe_colors)
+            country.coach = seed_country.coach
+            country.federation_name = seed_country.federation_name
+            country.federation_logo_url = seed_country.federation_logo_url
             session.add(country)
 
         for seed_player in seed_country.players:
@@ -83,4 +94,21 @@ def seed_database(session: Session) -> None:
     if collector is None:
         session.add(Collector(slug=DEMO_COLLECTOR_SLUG, display_name="Demo collector"))
 
+    _seed_questions(session)
+
     session.commit()
+
+
+def _seed_questions(session: Session) -> None:
+    """Load trivia questions without duplicating rows (matched by text)."""
+    existing_texts = {q.text for q in session.exec(select(Question)).all()}
+    for seed_q in TRIVIA_QUESTIONS:
+        if seed_q.text not in existing_texts:
+            session.add(
+                Question(
+                    text=seed_q.text,
+                    correct_answer=seed_q.correct_answer,
+                    wrong_answers="|".join(seed_q.wrong_answers),
+                    category=seed_q.category,
+                )
+            )
