@@ -43,6 +43,11 @@ ADMIN_SECRET_KEY
   Secret key used to sign the admin session cookie.
   Use a long, random string in production (e.g. `openssl rand -hex 32`).
   Defaults to an insecure placeholder; always override before deploying.
+
+ALLOWED_ORIGINS
+  Comma-separated list of extra CORS origins to allow, appended to the local dev defaults.
+  Example: `https://figus2026.onrender.com` or `https://figus2026.onrender.com,https://custom.domain`.
+  Omit for local development (localhost origins are always included).
 ```
 
 ## Setting up the admin panel
