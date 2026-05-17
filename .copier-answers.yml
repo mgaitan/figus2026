@@ -1,0 +1,14 @@
+# Changes here will be overwritten by Copier.
+_commit: 0.4.3
+_src_path: gh:mgaitan/python-package-copier-template
+author_email: gaitan@gmail.com
+author_fullname: Martín Gaitán y Ema Gaitán Lobo
+author_username: mgaitan
+copyright_license: BSD-3-Clause
+gh_repo_create: public
+project_description: Nuestro album de figus para el mundial
+project_name: figus2026
+python_package_command_line_name: figus2026
+python_package_distribution_name: figus2026
+python_package_import_name: figus2026
+repository_name: figus2026
