@@ -41,6 +41,11 @@ def seed_database(session: Session) -> None:
                 select(Player).where(Player.country_id == country.id, Player.name == seed_player.name)
             ).one_or_none()
             if player is not None:
+                player.position = seed_player.position
+                player.scarcity = seed_player.scarcity
+                player.image_url = seed_player.image_url
+                player.source_url = seed_country.wikipedia_url
+                session.add(player)
                 continue
             session.add(
                 Player(

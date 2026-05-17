@@ -69,7 +69,7 @@ async function apiPost<T>(path: string): Promise<T> {
   const response = await fetch(`${apiBaseUrl}${path}`, { method: 'POST' })
   if (response.status === 429) {
     const limit = (await response.json()) as { detail: PackResult & { reason: string } }
-    notice = limit.detail.reason === 'daily_limit_reached' ? 'Daily packs opened' : 'Pack unavailable'
+    notice = limit.detail.reason === 'daily_limit_reached' ? 'Ya abriste los sobres de hoy' : 'Sobre no disponible'
     return limit.detail as T
   }
   if (!response.ok) {
@@ -78,10 +78,33 @@ async function apiPost<T>(path: string): Promise<T> {
   return response.json() as Promise<T>
 }
 
+function countryName(name: string): string {
+  return (
+    {
+      Brazil: 'Brasil',
+      France: 'Francia',
+    }[name] ?? name
+  )
+}
+
+function positionName(position: string | null): string {
+  if (!position) {
+    return 'Plantel'
+  }
+  return (
+    {
+      Goalkeeper: 'Arquero',
+      Defender: 'Defensor',
+      Midfielder: 'Mediocampista',
+      Forward: 'Delantero',
+    }[position] ?? position
+  )
+}
+
 function rarityLabel(scarcity: number): string {
-  if (scarcity <= 35) return 'legend'
-  if (scarcity <= 70) return 'rare'
-  return 'base'
+  if (scarcity <= 35) return 'leyenda'
+  if (scarcity <= 70) return 'difícil'
+  return 'común'
 }
 
 function initials(name: string): string {
@@ -105,7 +128,7 @@ async function loadCountry(code: string): Promise<void> {
   window.setTimeout(() => {
     pageTurning = false
     render()
-  }, 220)
+  }, 240)
 }
 
 async function openPack(): Promise<void> {
@@ -120,7 +143,8 @@ function countryButtons(): string {
     .map(
       (country) => `
         <button class="country-tab ${country.code === selectedCountryCode ? 'is-active' : ''}" data-country="${country.code}">
-          <span>${country.code}</span>
+          <span>${countryName(country.name)}</span>
+          <small>${country.code}</small>
           <strong>${country.owned_stickers}/${country.total_stickers}</strong>
         </button>
       `,
@@ -132,6 +156,11 @@ function stickerCard(sticker: Sticker): string {
   const rarity = rarityLabel(sticker.scarcity)
   return `
     <article class="sticker ${sticker.owned ? 'is-owned' : 'is-missing'}">
+      <div class="sticker-shine"></div>
+      <div class="sticker-topline">
+        <span>${selectedPage?.code ?? 'WC'}</span>
+        <b>${rarity}</b>
+      </div>
       <div class="sticker-photo ${rarity}">
         ${
           sticker.image_url
@@ -140,10 +169,10 @@ function stickerCard(sticker: Sticker): string {
         }
       </div>
       <div class="sticker-meta">
-        <strong>${sticker.owned ? sticker.name : 'Missing'}</strong>
-        <span>${sticker.position ?? 'Squad'}</span>
+        <strong>${sticker.name}</strong>
+        <span>${positionName(sticker.position)}</span>
       </div>
-      <small>${rarity}</small>
+      <div class="sticker-status">${sticker.owned ? 'pegada' : 'falta'}</div>
     </article>
   `
 }
@@ -153,15 +182,16 @@ function packStrip(): string {
     return ''
   }
   if (!lastPack.opened) {
-    return `<div class="pack-strip"><strong>${notice}</strong><span>0 packs left today</span></div>`
+    return `<div class="pack-strip"><strong>${notice}</strong><span>0 sobres disponibles</span></div>`
   }
   return `
     <div class="pack-strip">
+      <strong class="pack-title">Último sobre</strong>
       ${lastPack.stickers
         .map(
           (sticker) => `
             <span class="pack-pull ${sticker.is_new ? 'is-new' : ''}">
-              ${sticker.country_code} · ${sticker.name}
+              ${sticker.is_new ? 'Nueva' : 'Repetida'} · ${sticker.country_code} · ${sticker.name}
             </span>
           `,
         )
@@ -172,23 +202,30 @@ function packStrip(): string {
 
 function albumPage(): string {
   if (!selectedPage) {
-    return '<section class="album-page"></section>'
+    return '<section class="album-spread"></section>'
   }
   const country = countries.find((item) => item.code === selectedPage?.code)
   return `
-    <section class="album-page ${pageTurning ? 'is-turning' : ''}">
-      <div class="page-header">
-        <div>
-          <span class="eyebrow">${selectedPage.code}</span>
-          <h1>${selectedPage.name}</h1>
-        </div>
-        <div class="progress-stamp">
-          <strong>${country?.owned_stickers ?? 0}</strong>
-          <span>of ${country?.total_stickers ?? selectedPage.stickers.length}</span>
-        </div>
+    <section class="album-spread ${pageTurning ? 'is-turning' : ''}">
+      <div class="album-cover-strip">
+        <span>Copa Mundial 2026</span>
+        <strong>Álbum de figus</strong>
       </div>
-      <div class="sticker-grid">
-        ${selectedPage.stickers.map(stickerCard).join('')}
+      <div class="album-page">
+        <div class="page-header">
+          <div>
+            <span class="eyebrow">Selección ${selectedPage.code}</span>
+            <h1>${countryName(selectedPage.name)}</h1>
+            <p>Plantel actual para completar, pegar y sufrir con dignidad.</p>
+          </div>
+          <div class="progress-stamp">
+            <strong>${country?.owned_stickers ?? 0}</strong>
+            <span>de ${country?.total_stickers ?? selectedPage.stickers.length}</span>
+          </div>
+        </div>
+        <div class="sticker-grid">
+          ${selectedPage.stickers.map(stickerCard).join('')}
+        </div>
       </div>
     </section>
   `
@@ -196,7 +233,7 @@ function albumPage(): string {
 
 function render(): void {
   if (loading) {
-    app.innerHTML = '<main class="shell"><section class="album-page loading-page"></section></main>'
+    app.innerHTML = '<main class="shell"><section class="album-spread loading-page"></section></main>'
     return
   }
 
@@ -204,14 +241,18 @@ function render(): void {
     <main class="shell">
       <aside class="sidebar">
         <div class="brand">
-          <span>figus</span>
+          <span>Figus</span>
           <strong>2026</strong>
         </div>
-        <nav class="country-list" aria-label="Countries">
+        <div class="sidebar-copy">
+          <strong>Mi álbum</strong>
+          <span>Pasá de selección y abrí dos sobres diarios.</span>
+        </div>
+        <nav class="country-list" aria-label="Selecciones">
           ${countryButtons()}
         </nav>
         <button class="pack-button" id="open-pack" type="button">
-          <span>Open pack</span>
+          <span>Abrir sobre</span>
           <strong>5</strong>
         </button>
       </aside>
@@ -240,7 +281,7 @@ async function boot(): Promise<void> {
     await loadCountries()
     await loadCountry(selectedCountryCode)
   } catch {
-    notice = 'API unavailable'
+    notice = 'API no disponible'
   } finally {
     loading = false
     render()
