@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: figus2026
+    runtime: python
+    region: oregon
+    plan: free
+    buildCommand: cd frontend && npm ci && npm run build && cd .. && uv sync --no-dev
+    startCommand: uv run uvicorn figus2026.app:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: DATABASE_URL
+        value: sqlite:///figus2026.db
+      - key: ALLOWED_ORIGINS
+        value: https://figus2026.onrender.com
+      - key: ADMIN_USERNAME
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: ADMIN_SECRET_KEY
+        sync: false

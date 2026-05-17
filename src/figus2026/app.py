@@ -33,6 +33,15 @@ from figus2026.services import (
 
 load_dotenv()
 
+_DEFAULT_CORS_ORIGINS = ["http://localhost:5173", "http://127.0.0.1:5173"]
+
+
+def _cors_origins() -> list[str]:
+    """Return allowed CORS origins from env var or local dev defaults."""
+    raw = os.environ.get("ALLOWED_ORIGINS", "")
+    extra = [o.strip() for o in raw.split(",") if o.strip()]
+    return _DEFAULT_CORS_ORIGINS + extra
+
 
 def mount_frontend(app: FastAPI, frontend_dist: Path | None = None) -> None:
     """Serve the built Vite album when `frontend/dist` is available."""
@@ -148,7 +157,7 @@ def create_app(
     )
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+        allow_origins=_cors_origins(),
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
